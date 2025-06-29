@@ -1,5 +1,5 @@
 // middleware/validation.js
-const { validationResult } = require('express-validator');
+const { validationResult, body } = require('express-validator');
 
 const validate = (req, res, next) => {
   const errors = validationResult(req);
@@ -13,4 +13,17 @@ const validate = (req, res, next) => {
   next();
 };
 
-module.exports = validate;
+// Google OAuth validation rules
+const validateGoogleAuth = [
+  body('idToken')
+    .notEmpty()
+    .withMessage('Google ID token is required')
+    .isString()
+    .withMessage('Google ID token must be a string'),
+  validate
+];
+
+module.exports = {
+  validate,
+  validateGoogleAuth
+};

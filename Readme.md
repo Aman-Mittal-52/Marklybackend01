@@ -2,18 +2,27 @@
 
 ## Overview
 
-Markly is a bookmark sharing platform that allows users to save, organize, and share bookmarks with others. This API provides endpoints for user authentication, bookmark management, comments, and file uploads.
+Markly is a bookmark sharing platform that allows users to save, organize, and share bookmarks with others. This API provides endpoints for user authentication (including Google OAuth), bookmark management, comments, and file uploads.
 
 **Base URL:** `http://localhost:5000/api`  
 **Version:** 1.0.0
 
 ## Authentication
 
+The API supports two authentication methods:
+
+### 1. Local Authentication
 Most endpoints require authentication using JWT tokens. Include the token in the Authorization header:
 
 ```
 Authorization: Bearer <your-jwt-token>
 ```
+
+### 2. Google OAuth Authentication
+Users can authenticate using their Google accounts. The frontend should:
+1. Use Google Sign-In SDK to get an ID token
+2. Send the ID token to the backend for verification
+3. Receive a JWT token for subsequent API calls
 
 ## Error Responses
 
@@ -31,9 +40,9 @@ All endpoints return consistent error responses:
 
 ### Authentication (`/auth`)
 
-#### Register User
+#### Register User (Local)
 - **POST** `/auth/register`
-- **Description:** Create a new user account
+- **Description:** Create a new user account with email/password
 - **Body:**
   ```json
   {
@@ -55,14 +64,15 @@ All endpoints return consistent error responses:
       "email": "email",
       "displayName": "display name",
       "avatar": "avatar-url",
-      "isVerified": false
+      "isVerified": false,
+      "authProvider": "local"
     }
   }
   ```
 
-#### Login User
+#### Login User (Local)
 - **POST** `/auth/login`
-- **Description:** Authenticate user and get access token
+- **Description:** Authenticate user with email/password and get access token
 - **Body:**
   ```json
   {
@@ -82,7 +92,100 @@ All endpoints return consistent error responses:
       "email": "email",
       "displayName": "display name",
       "avatar": "avatar-url",
-      "isVerified": false
+      "isVerified": false,
+      "authProvider": "local"
+    }
+  }
+  ```
+
+#### Google OAuth Authentication
+- **POST** `/auth/google`
+- **Description:** Authenticate or register user using Google OAuth
+- **Body:**
+  ```json
+  {
+    "idToken": "google-id-token"
+  }
+  ```
+- **Response (New User):**
+  ```json
+  {
+    "success": true,
+    "message": "Google registration successful",
+    "token": "jwt-token",
+    "user": {
+      "id": "user-id",
+      "username": "auto-generated-username",
+      "email": "email",
+      "displayName": "display name",
+      "avatar": "google-profile-picture",
+      "isVerified": true,
+      "authProvider": "google"
+    }
+  }
+  ```
+- **Response (Existing User):**
+  ```json
+  {
+    "success": true,
+    "message": "Google login successful",
+    "token": "jwt-token",
+    "user": {
+      "id": "user-id",
+      "username": "username",
+      "email": "email",
+      "displayName": "display name",
+      "avatar": "avatar-url",
+      "isVerified": true,
+      "authProvider": "google"
+    }
+  }
+  ```
+
+#### Link Google Account
+- **POST** `/auth/google/link`
+- **Description:** Link Google account to existing local account
+- **Authentication:** Required
+- **Body:**
+  ```json
+  {
+    "idToken": "google-id-token"
+  }
+  ```
+- **Response:**
+  ```json
+  {
+    "success": true,
+    "message": "Google account linked successfully",
+    "user": {
+      "id": "user-id",
+      "username": "username",
+      "email": "email",
+      "displayName": "display name",
+      "avatar": "avatar-url",
+      "isVerified": true,
+      "authProvider": "google"
+    }
+  }
+  ```
+
+#### Unlink Google Account
+- **DELETE** `/auth/google/unlink`
+- **Description:** Unlink Google account from user account (requires password)
+- **Authentication:** Required
+- **Response:**
+  ```json
+  {
+    "success": true,
+    "message": "Google account unlinked successfully",
+    "user": {
+      "id": "user-id",
+      "username": "username",
+      "email": "email",
+      "displayName": "display name",
+      "avatar": "avatar-url",
+      "isVerified": false,
+      "authProvider": "local"
     }
   }
   ```
@@ -113,6 +216,8 @@ All endpoints return consistent error responses:
       "isVerified": false,
       "isActive": true,
       "role": "user",
+      "authProvider": "local|google",
+      "googleId": "google-id (if linked)",
       "preferences": {
         "emailNotifications": true,
         "pushNotifications": false,
@@ -163,6 +268,7 @@ All endpoints return consistent error responses:
           "displayName": "display name",
           "avatar": "avatar-url",
           "isVerified": false,
+          "authProvider": "local",
           "stats": {
             "followers": 0
           }
@@ -217,6 +323,7 @@ All endpoints return consistent error responses:
         "displayName": "display name",
         "avatar": "avatar-url",
         "isVerified": false,
+        "authProvider": "google",
         "bio": "author bio",
         "stats": {
           "followers": 0,
@@ -320,6 +427,7 @@ All endpoints return consistent error responses:
       "isVerified": false,
       "isActive": true,
       "role": "user",
+      "authProvider": "google",
       "stats": {
         "followers": 0,
         "following": 0,
@@ -379,6 +487,7 @@ All endpoints return consistent error responses:
       "isVerified": false,
       "isActive": true,
       "role": "user",
+      "authProvider": "local",
       "preferences": {
         "emailNotifications": true,
         "pushNotifications": false,
@@ -452,7 +561,8 @@ All endpoints return consistent error responses:
           "username": "username",
           "displayName": "display name",
           "avatar": "avatar-url",
-          "isVerified": false
+          "isVerified": false,
+          "authProvider": "google"
         },
         "parentComment": null,
         "isActive": true,
@@ -494,7 +604,8 @@ All endpoints return consistent error responses:
 {
   username: String (3-30 chars, unique),
   email: String (unique),
-  password: String (min 6 chars, hashed),
+  password: String (min 6 chars, hashed, optional for Google OAuth),
+  googleId: String (unique, optional),
   displayName: String (max 50 chars),
   avatar: String (URL),
   coverImage: String (URL),
@@ -509,6 +620,7 @@ All endpoints return consistent error responses:
   isVerified: Boolean,
   isActive: Boolean,
   role: String (enum: 'user', 'admin', 'moderator'),
+  authProvider: String (enum: 'local', 'google'),
   preferences: {
     emailNotifications: Boolean,
     pushNotifications: Boolean,
@@ -571,6 +683,57 @@ All endpoints return consistent error responses:
 }
 ```
 
+## Google OAuth Setup
+
+### Frontend Integration
+
+1. **Include Google Sign-In SDK:**
+   ```html
+   <script src="https://accounts.google.com/gsi/client" async defer></script>
+   ```
+
+2. **Initialize Google Sign-In:**
+   ```javascript
+   google.accounts.id.initialize({
+     client_id: 'YOUR_GOOGLE_CLIENT_ID',
+     callback: handleCredentialResponse
+   });
+   ```
+
+3. **Handle the response:**
+   ```javascript
+   async function handleCredentialResponse(response) {
+     try {
+       const result = await fetch('/api/auth/google', {
+         method: 'POST',
+         headers: {
+           'Content-Type': 'application/json',
+         },
+         body: JSON.stringify({
+           idToken: response.credential
+         })
+       });
+       
+       const data = await result.json();
+       if (data.success) {
+         // Store JWT token
+         localStorage.setItem('token', data.token);
+         // Redirect or update UI
+       }
+     } catch (error) {
+       console.error('Google auth error:', error);
+     }
+   }
+   ```
+
+### Backend Configuration
+
+Required environment variables:
+```
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+```
+
 ## Rate Limiting
 
 The API implements rate limiting to prevent abuse:
@@ -582,6 +745,7 @@ The API implements rate limiting to prevent abuse:
 - **CORS:** Configured for frontend origin
 - **Helmet:** Security headers enabled
 - **JWT Authentication:** Token-based authentication
+- **Google OAuth:** Secure Google account integration
 - **Password Hashing:** Bcrypt with salt rounds of 12
 - **Input Validation:** Express-validator middleware
 - **File Upload Security:** Multer with file type restrictions
@@ -593,6 +757,9 @@ Required environment variables:
 PORT=5000
 MONGODB_URI=mongodb://localhost:27017/markly
 JWT_SECRET=your-jwt-secret
+JWT_EXPIRES_IN=7d
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
 CLOUDINARY_CLOUD_NAME=your-cloud-name
 CLOUDINARY_API_KEY=your-api-key
 CLOUDINARY_API_SECRET=your-api-secret
@@ -608,13 +775,20 @@ FRONTEND_URL=http://localhost:3000
 
 2. Set up environment variables in `.env` file
 
-3. Start the server:
+3. Configure Google OAuth:
+   - Go to [Google Cloud Console](https://console.cloud.google.com/)
+   - Create a new project or select existing one
+   - Enable Google+ API
+   - Create OAuth 2.0 credentials
+   - Add authorized origins and redirect URIs
+
+4. Start the server:
    ```bash
    npm run dev  # Development mode
    npm start    # Production mode
    ```
 
-4. The API will be available at `http://localhost:5000/api`
+5. The API will be available at `http://localhost:5000/api`
 
 ## Testing the API
 
@@ -624,7 +798,16 @@ You can test the API endpoints using tools like:
 - curl
 - Thunder Client (VS Code extension)
 
-Example curl command for registration:
+Example curl command for Google OAuth:
+```bash
+curl -X POST http://localhost:5000/api/auth/google \
+  -H "Content-Type: application/json" \
+  -d '{
+    "idToken": "google-id-token-from-frontend"
+  }'
+```
+
+Example curl command for local registration:
 ```bash
 curl -X POST http://localhost:5000/api/auth/register \
   -H "Content-Type: application/json" \

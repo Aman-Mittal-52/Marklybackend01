@@ -20,8 +20,15 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: true,
+    required: function() {
+      return !this.googleId; // Password is required only if not using Google OAuth
+    },
     minlength: 6
+  },
+  googleId: {
+    type: String,
+    unique: true,
+    sparse: true // Allows multiple null values
   },
   displayName: {
     type: String,
@@ -69,6 +76,11 @@ const userSchema = new mongoose.Schema({
     enum: ['user', 'admin', 'moderator'],
     default: 'user'
   },
+  authProvider: {
+    type: String,
+    enum: ['local', 'google'],
+    default: 'local'
+  },
   preferences: {
     emailNotifications: { type: Boolean, default: true },
     pushNotifications: { type: Boolean, default: false },
@@ -86,16 +98,34 @@ const userSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Hash password before saving
+// Hash password before saving (only for local auth)
 userSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) return next();
+  if (!this.isModified('password') || !this.password) return next();
   this.password = await bcrypt.hash(this.password, 12);
   next();
 });
 
-// Compare password method
+// Compare password method (only for local auth)
 userSchema.methods.comparePassword = async function(candidatePassword) {
+  if (!this.password) return false;
   return await bcrypt.compare(candidatePassword, this.password);
 };
+
+// Generate username from email if not provided
+userSchema.pre('save', async function(next) {
+  if (this.isNew && !this.username) {
+    const emailPrefix = this.email.split('@')[0];
+    let username = emailPrefix;
+    let counter = 1;
+    
+    while (await mongoose.model('User').findOne({ username })) {
+      username = `${emailPrefix}${counter}`;
+      counter++;
+    }
+    
+    this.username = username;
+  }
+  next();
+});
 
 module.exports = mongoose.model('User', userSchema);
